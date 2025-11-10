@@ -77,9 +77,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/search", authMiddleware, async (req, res) => {
     try {
-      const userId = process.env.NODE_ENV === "development" 
-        ? "dev-user-id" 
-        : (req as any).user?.userId;
+      const userId = (req as any).user?.userId;
 
       if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
@@ -129,9 +127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/searches", authMiddleware, async (req, res) => {
     try {
-      const userId = process.env.NODE_ENV === "development" 
-        ? "dev-user-id" 
-        : (req as any).user?.userId;
+      const userId = (req as any).user?.userId;
 
       if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
@@ -150,9 +146,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/analytics", authMiddleware, async (req, res) => {
     try {
-      const userId = process.env.NODE_ENV === "development" 
-        ? "dev-user-id" 
-        : (req as any).user?.userId;
+      const userId = (req as any).user?.userId;
 
       if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
@@ -189,9 +183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/profile", authMiddleware, async (req, res) => {
     try {
-      const userId = process.env.NODE_ENV === "development" 
-        ? "dev-user-id" 
-        : (req as any).user?.userId;
+      const userId = (req as any).user?.userId;
 
       if (!userId) {
         res.status(401).json({ error: "Unauthorized" });

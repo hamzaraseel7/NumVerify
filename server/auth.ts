@@ -30,11 +30,6 @@ export async function comparePassword(password: string, hash: string): Promise<b
 }
 
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
-  if (process.env.NODE_ENV === "development") {
-    next();
-    return;
-  }
-
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     res.status(401).json({ error: "Unauthorized" });
