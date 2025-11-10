@@ -7,6 +7,9 @@ import { Phone } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { setToken, setUser } from "@/lib/auth";
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -15,18 +18,35 @@ export default function AuthPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
+  const authMutation = useMutation({
+    mutationFn: async () => {
+      const endpoint = isLogin ? "/api/login" : "/api/signup";
+      const res = await apiRequest("POST", endpoint, { email, password });
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      setToken(data.token);
+      setUser(data.user);
+      toast({
+        title: isLogin ? "Login successful!" : "Account created!",
+        description: "Redirecting to dashboard...",
+      });
+      setTimeout(() => {
+        setLocation("/dashboard");
+      }, 500);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Authentication failed",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log(isLogin ? "Login submitted" : "Signup submitted", { email, password });
-    
-    toast({
-      title: isLogin ? "Login successful!" : "Account created!",
-      description: "Redirecting to dashboard...",
-    });
-    
-    setTimeout(() => {
-      setLocation("/dashboard");
-    }, 1000);
+    authMutation.mutate();
   };
 
   return (
@@ -78,8 +98,13 @@ export default function AuthPage() {
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full" data-testid="button-submit">
-                {isLogin ? "Sign In" : "Create Account"}
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={authMutation.isPending}
+                data-testid="button-submit"
+              >
+                {authMutation.isPending ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
               </Button>
               <p className="text-sm text-muted-foreground text-center">
                 {isLogin ? "Don't have an account? " : "Already have an account? "}
