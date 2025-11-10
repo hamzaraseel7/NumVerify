@@ -7,36 +7,63 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TrendingUp, Clock, CheckCircle, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+
+interface SearchResult {
+  id: string;
+  phoneNumber: string;
+  valid: boolean;
+  country: string | null;
+  location: string | null;
+  carrier: string | null;
+  lineType: string | null;
+  aiInsight: string | null;
+}
+
+interface AnalyticsData {
+  totalSearches: number;
+  recentSearches: number;
+  validNumbersCount: number;
+  validationRate: number;
+}
 
 export default function Dashboard() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [countryCode, setCountryCode] = useState("US");
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchResult, setSearchResult] = useState<any>(null);
+  const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const { toast } = useToast();
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("Searching phone number:", phoneNumber, "with country:", countryCode);
-    
-    setIsSearching(true);
-    
-    setTimeout(() => {
-      setSearchResult({
-        phoneNumber: phoneNumber,
-        valid: true,
-        country: countryCode === "US" ? "United States" : countryCode === "GB" ? "United Kingdom" : "India",
-        location: countryCode === "US" ? "California" : countryCode === "GB" ? "London" : "Mumbai",
-        carrier: "T-Mobile",
-        lineType: "Mobile",
-        aiInsight: "This appears to be a legitimate mobile number registered in a metropolitan area. The carrier has a good reputation with low spam reports.",
-      });
-      setIsSearching(false);
+  const { data: analytics } = useQuery<AnalyticsData>({
+    queryKey: ["/api/analytics"],
+  });
+
+  const searchMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/search", { phoneNumber, countryCode });
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      setSearchResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/searches"] });
       toast({
         title: "Search complete!",
         description: "Phone number verified successfully.",
       });
-    }, 1500);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Search failed",
+        description: error.message || "Failed to validate phone number",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    searchMutation.mutate();
   };
 
   return (
@@ -92,8 +119,8 @@ export default function Dashboard() {
                   />
                 </div>
               </div>
-              <Button type="submit" className="w-full" disabled={isSearching} data-testid="button-search">
-                {isSearching ? (
+              <Button type="submit" className="w-full" disabled={searchMutation.isPending} data-testid="button-search">
+                {searchMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Searching...
@@ -119,8 +146,10 @@ export default function Dashboard() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold" data-testid="text-total-searches">247</div>
-            <p className="text-xs text-muted-foreground mt-1">+12% from last month</p>
+            <div className="text-3xl font-bold" data-testid="text-total-searches">
+              {analytics?.totalSearches ?? 0}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">All time</p>
           </CardContent>
         </Card>
 
@@ -130,7 +159,9 @@ export default function Dashboard() {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold" data-testid="text-recent-searches">18</div>
+            <div className="text-3xl font-bold" data-testid="text-recent-searches">
+              {analytics?.recentSearches ?? 0}
+            </div>
             <p className="text-xs text-muted-foreground mt-1">Last 7 days</p>
           </CardContent>
         </Card>
@@ -141,7 +172,9 @@ export default function Dashboard() {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold" data-testid="text-valid-numbers">94%</div>
+            <div className="text-3xl font-bold" data-testid="text-valid-numbers">
+              {analytics?.validationRate ?? 0}%
+            </div>
             <p className="text-xs text-muted-foreground mt-1">Validation rate</p>
           </CardContent>
         </Card>
@@ -164,28 +197,38 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Country</p>
-                  <p className="text-base mt-1" data-testid="text-result-country">{searchResult.country}</p>
+                  <p className="text-base mt-1" data-testid="text-result-country">
+                    {searchResult.country || "Unknown"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Location</p>
-                  <p className="text-base mt-1" data-testid="text-result-location">{searchResult.location}</p>
+                  <p className="text-base mt-1" data-testid="text-result-location">
+                    {searchResult.location || "Unknown"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Carrier</p>
-                  <p className="text-base mt-1" data-testid="text-result-carrier">{searchResult.carrier}</p>
+                  <p className="text-base mt-1" data-testid="text-result-carrier">
+                    {searchResult.carrier || "Unknown"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Line Type</p>
-                  <p className="text-base mt-1" data-testid="text-result-line-type">{searchResult.lineType}</p>
+                  <p className="text-base mt-1" data-testid="text-result-line-type">
+                    {searchResult.lineType || "Unknown"}
+                  </p>
                 </div>
               </div>
 
-              <div className="p-4 rounded-md bg-accent border-l-4 border-primary">
-                <p className="text-sm font-medium mb-2">AI Insight</p>
-                <p className="text-sm text-muted-foreground" data-testid="text-ai-insight">
-                  {searchResult.aiInsight}
-                </p>
-              </div>
+              {searchResult.aiInsight && (
+                <div className="p-4 rounded-md bg-accent border-l-4 border-primary">
+                  <p className="text-sm font-medium mb-2">AI Insight</p>
+                  <p className="text-sm text-muted-foreground" data-testid="text-ai-insight">
+                    {searchResult.aiInsight}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </motion.div>
