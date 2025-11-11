@@ -1,6 +1,4 @@
-import { db } from "../db";
-import { users, searches, analytics, type User, type InsertUser, type Search, type InsertSearch, type Analytics } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { type User, type InsertUser, type Search, type InsertSearch, type Analytics } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -16,65 +14,93 @@ export interface IStorage {
   incrementSearchCount(userId: string, isValid: boolean): Promise<void>;
 }
 
-export class DbStorage implements IStorage {
+export class MemStorage implements IStorage {
+  private users: Map<string, User> = new Map();
+  private usersByEmail: Map<string, User> = new Map();
+  private searches: Map<string, Search> = new Map();
+  private analytics: Map<string, Analytics> = new Map();
+
   async getUser(id: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
-    return result[0];
+    return this.users.get(id);
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
-    return result[0];
+    return this.usersByEmail.get(email);
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const result = await db.insert(users).values(insertUser).returning();
-    const user = result[0];
+    const user: User = {
+      id: randomUUID(),
+      email: insertUser.email,
+      password: insertUser.password,
+      createdAt: new Date(),
+    };
     
-    await db.insert(analytics).values({
+    this.users.set(user.id, user);
+    this.usersByEmail.set(user.email, user);
+    
+    const userAnalytics: Analytics = {
+      id: randomUUID(),
       userId: user.id,
       totalSearches: 0,
       recentSearches: 0,
       validNumbersCount: 0,
-    });
+      updatedAt: new Date(),
+    };
+    this.analytics.set(user.id, userAnalytics);
     
     return user;
   }
 
-  async createSearch(search: InsertSearch): Promise<Search> {
-    const result = await db.insert(searches).values(search).returning();
-    return result[0];
+  async createSearch(insertSearch: InsertSearch): Promise<Search> {
+    const search: Search = {
+      id: randomUUID(),
+      userId: insertSearch.userId,
+      phoneNumber: insertSearch.phoneNumber,
+      countryCode: insertSearch.countryCode,
+      country: insertSearch.country ?? null,
+      location: insertSearch.location ?? null,
+      carrier: insertSearch.carrier ?? null,
+      lineType: insertSearch.lineType ?? null,
+      valid: insertSearch.valid,
+      aiInsight: insertSearch.aiInsight ?? null,
+      createdAt: new Date(),
+    };
+    
+    this.searches.set(search.id, search);
+    return search;
   }
 
   async getUserSearches(userId: string, limit: number = 50): Promise<Search[]> {
-    return await db
-      .select()
-      .from(searches)
-      .where(eq(searches.userId, userId))
-      .orderBy(desc(searches.createdAt))
-      .limit(limit);
+    const userSearches = Array.from(this.searches.values())
+      .filter(search => search.userId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
+    
+    return userSearches;
   }
 
   async getUserAnalytics(userId: string): Promise<Analytics | undefined> {
-    const result = await db.select().from(analytics).where(eq(analytics.userId, userId)).limit(1);
-    return result[0];
+    return this.analytics.get(userId);
   }
 
   async updateUserAnalytics(userId: string, data: Partial<Analytics>): Promise<void> {
-    await db.update(analytics).set(data).where(eq(analytics.userId, userId));
+    const current = this.analytics.get(userId);
+    if (current) {
+      this.analytics.set(userId, { ...current, ...data, updatedAt: new Date() });
+    }
   }
 
   async incrementSearchCount(userId: string, isValid: boolean): Promise<void> {
     const userAnalytics = await this.getUserAnalytics(userId);
     if (userAnalytics) {
-      await db.update(analytics).set({
+      await this.updateUserAnalytics(userId, {
         totalSearches: userAnalytics.totalSearches + 1,
         recentSearches: userAnalytics.recentSearches + 1,
         validNumbersCount: isValid ? userAnalytics.validNumbersCount + 1 : userAnalytics.validNumbersCount,
-        updatedAt: new Date(),
-      }).where(eq(analytics.userId, userId));
+      });
     }
   }
 }
 
-export const storage = new DbStorage();
+export const storage = new MemStorage();
